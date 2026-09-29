@@ -44,20 +44,24 @@ if (!a['encode-only']) {
 
 if (a['no-encode']) process.exit(0);
 
-// Encode. Grain is added here (luma only, temporal) rather than in the PNGs.
+// Encode. Optional luma grain (--grain N) is added here rather than in the PNGs;
+// it is off by default: temporal grain is near-incompressible and flat motion
+// graphics don't need it (the renderer already dithers its gradients).
 const audio = path.join(ROOT, 'showreel', 'audio', 'soundtrack.wav');
 const hasAudio = fs.existsSync(audio);
+const grain = +(a.grain ?? 0);
 const vf = [
   'scale=out_color_matrix=bt709:out_range=tv',
   'format=yuv420p',
-  `noise=c0s=${a.grain ?? 5}:c0f=t+u`,
+  ...(grain > 0 ? [`noise=c0s=${grain}:c0f=t+u`] : []),
 ].join(',');
 const cmd = [
   '-y', '-loglevel', 'error', '-stats',
   '-framerate', '60', '-i', path.join(framesDir, '%04d.png'),
   ...(hasAudio ? ['-i', audio] : []),
   '-vf', vf,
-  '-c:v', 'libx264', '-preset', 'slow', '-crf', String(a.crf ?? 15), '-profile:v', 'high', '-tune', 'grain',
+  '-c:v', 'libx264', '-preset', a.preset || 'slow', '-crf', String(a.crf ?? 17), '-profile:v', 'high',
+  '-tune', grain > 0 ? 'grain' : 'animation',
   '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
   ...(hasAudio ? ['-c:a', 'aac', '-b:a', '320k', '-shortest'] : []),
   '-movflags', '+faststart',
