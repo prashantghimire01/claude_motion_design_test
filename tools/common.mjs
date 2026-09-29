@@ -43,17 +43,24 @@ export function playwright() {
   }
 }
 
-export async function openReel(port, { gpu = false } = {}) {
+export const FORMATS = {
+  landscape: { W: 1920, H: 1080, suffix: '' },
+  vertical: { W: 1080, H: 1920, suffix: '-vertical' },
+};
+export const formatOf = (name) => (FORMATS[name] ? name : 'landscape');
+
+export async function openReel(port, { gpu = false, format = 'landscape' } = {}) {
+  const F = FORMATS[formatOf(format)];
   const { chromium } = playwright();
   const args = ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--ignore-gpu-blocklist'];
   if (!gpu) args.push('--use-angle=swiftshader', '--enable-unsafe-swiftshader');
   const browser = await chromium.launch({ args });
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: F.W, height: F.H }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.error('[page error]', e.message));
   page.on('console', (m) => {
     if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('GL Driver Message')) console.error('[console]', m.text());
   });
-  await page.goto(`http://127.0.0.1:${port}/showreel/index.html?render`);
+  await page.goto(`http://127.0.0.1:${port}/showreel/index.html?render&format=${formatOf(format)}`);
   await page.waitForFunction(() => window.ready === true, null, { timeout: 120000 });
   return { browser, page };
 }

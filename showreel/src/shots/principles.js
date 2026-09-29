@@ -6,12 +6,39 @@ import { archivo, mono } from '../fonts.js';
 import { BEAT, FPS, PRINCIPLES } from '../timeline.js';
 
 export let drawFollowSettled = null;
-export const FOLLOW = { word: 'FOLLOW THROUGH', weight: 900, width: 78, size: 206, baseline: 640 };
+export let followCenterY = 560;
 
 export async function createPrinciples({ W, H }) {
   const m = document.createElement('canvas').getContext('2d');
   const adv = (ch, weight, width, size) => { if (ch === ' ') return size * 0.3; m.font = archivo(weight, width, size); m.letterSpacing = '0px'; return m.measureText(ch).width; };
   const T = (b) => b * BEAT;
+  // size (px) at which `text` spans `target` px at a given variable-font width
+  const fit = (text, weight, width, target) => { m.font = archivo(weight, width, 100); m.letterSpacing = '0px'; return (100 * target) / m.measureText(text).width; };
+
+  // Per-format layout. Landscape is the original design; vertical fits every
+  // word to the frame width, stacks FOLLOW / THROUGH and re-anchors the notes.
+  const V = H > W;
+  const TW = W - 144; // vertical: text measure
+  const LY = V
+    ? {
+      sq: { size: fit('SQUASH', 900, 104, TW), width: 104, base: Math.round(H * 0.56), pad: 72, drop: 1500, track: -3 },
+      st: { size: fit('STRETCH', 900, 125, TW - 20), base: Math.round(H * 0.54), measY: 70, label: 42, fs: 20 },
+      an: { size: fit('ANTICIPATION', 900, 62, TW - 90), width: 62, base: Math.round(H * 0.54), amp: 0.45 },
+      fo: { lines: ['FOLLOW', 'THROUGH'], width: 78, size: fit('THROUGH', 900, 78, TW - 30), top: Math.round(H * 0.5), travel: 1150 },
+      note: { x: 72, y: Math.round(H * 0.35), fs: 26 },
+      graph: { x: 80, y: H - 540, w: 380, h: 150, fs: 17 },
+      sk: 440,
+    }
+    : {
+      sq: { size: 300, width: 108, base: 700, pad: 140, drop: 900, track: -4 },
+      st: { size: 262, base: 650, measY: 65, label: 36, fs: 16 },
+      an: { size: 232, width: 72, base: 640, amp: 1 },
+      fo: { lines: ['FOLLOW THROUGH'], width: 78, size: 206, top: 640, travel: 1350 },
+      note: { x: 104, y: 250, fs: 20, nameX: 200 },
+      graph: { x: 120, y: 820, w: 300, h: 120, fs: 14 },
+      sk: 260,
+    };
+  const GR = LY.graph;
 
   function layoutLetters(word, weight, widths, size, track = 0) {
     const a = [...word].map((ch, i) => adv(ch, weight, widths[i], size) + track);
@@ -52,39 +79,43 @@ export async function createPrinciples({ W, H }) {
     ctx.beginPath();
     ctx.arc(px, Y(fns[0](clamp(u))), 6, 0, TAU);
     ctx.fill();
-    ctx.font = mono(600, 14);
+    ctx.font = mono(600, GR.fs);
     ctx.letterSpacing = '2px';
     ctx.fillStyle = rgba(fg, 0.75);
-    ctx.fillText(label, 0, -14);
+    ctx.fillText(label, 0, -GR.fs);
     ctx.textAlign = 'right';
-    ctx.fillText(`${Math.round(clamp(u) * 28)}f`, w, -14);
+    ctx.fillText(`${Math.round(clamp(u) * 28)}f`, w, -GR.fs);
     ctx.restore();
   }
 
   function annotate(ctx, card, fg, accent, p) {
+    const { x, y, fs } = LY.note;
+    const k = fs / 20;
     ctx.save();
-    ctx.font = mono(700, 20);
-    ctx.letterSpacing = '3px';
+    ctx.font = mono(700, fs);
+    ctx.letterSpacing = `${3 * k}px`;
     const a = ease.outCubic(prog(p, 0.0, 0.25));
+    const dy = (1 - a) * 12 * k;
     ctx.fillStyle = rgba(fg, 0.9 * a);
-    ctx.fillText(`Nº${card.no}`, 120, 250 - (1 - a) * 12);
-    ctx.font = mono(400, 20);
+    ctx.fillText(`Nº${card.no}`, x + 16 * k, y - dy);
+    const nx = LY.note.nameX ?? x + 16 * k + ctx.measureText(`Nº${card.no}`).width + 22 * k;
+    ctx.font = mono(400, fs);
     ctx.fillStyle = rgba(fg, 0.7 * a);
-    ctx.fillText(card.name, 200, 250 - (1 - a) * 12);
+    ctx.fillText(card.name, nx, y - dy);
     // bullet dot in accent
     ctx.fillStyle = accent;
     ctx.beginPath();
-    ctx.arc(104, 243 - (1 - a) * 12, 5, 0, TAU);
+    ctx.arc(x, y - 7 * k - dy, 5 * k, 0, TAU);
     ctx.fill();
     ctx.restore();
   }
 
   // ------------------------------------------------------------------------------------
   // Card 1 — SQUASH: drops in, squashes on impact, springs back (orange / ink)
-  const SQ = { size: 300, weight: 900, width: 108, base: 700 };
+  const SQ = { weight: 900, ...LY.sq };
   const sqDrop = (u) => { // u: seconds since card start → y offset & squash
     const tLand = 0.16;
-    if (u < tLand) { const k = u / tLand; return { dy: -900 * (1 - k * k), sy: 1 + 0.35 * k, land: 0 }; }
+    if (u < tLand) { const k = u / tLand; return { dy: -SQ.drop * (1 - k * k), sy: 1 + 0.35 * k, land: 0 }; }
     const v = u - tLand;
     return { dy: 0, sy: 1 - 0.5 * Math.exp(-v * 7) * Math.cos(v * 20), land: v };
   };
@@ -96,8 +127,8 @@ export async function createPrinciples({ W, H }) {
     ctx.fillStyle = rgba(PAL.ink, 0.9);
     const dip = st.land > 0 ? 22 * Math.exp(-st.land * 9) * Math.cos(st.land * 30) : 0;
     ctx.beginPath();
-    ctx.moveTo(140, SQ.base);
-    ctx.quadraticCurveTo(W / 2, SQ.base + dip * 2, W - 140, SQ.base);
+    ctx.moveTo(SQ.pad, SQ.base);
+    ctx.quadraticCurveTo(W / 2, SQ.base + dip * 2, W - SQ.pad, SQ.base);
     ctx.lineWidth = 3;
     ctx.strokeStyle = PAL.ink;
     ctx.stroke();
@@ -106,14 +137,14 @@ export async function createPrinciples({ W, H }) {
     const sy = st.sy, sx = 1 / Math.sqrt(Math.max(0.25, sy));
     ctx.scale(sx, sy);
     ctx.font = archivo(SQ.weight, SQ.width, SQ.size);
-    ctx.letterSpacing = '-4px';
+    ctx.letterSpacing = `${SQ.track}px`;
     ctx.textAlign = 'center';
     ctx.fillStyle = PAL.ink;
     ctx.fillText('SQUASH', 0, st.dy / sy);
     ctx.restore();
     annotate(ctx, PRINCIPLES[0], PAL.ink, PAL.paper, p);
     graph(ctx, {
-      x: 120, y: 820, w: 300, h: 120, u: p, color: PAL.paper, fg: PAL.ink, label: 'SCALE Y',
+      x: GR.x, y: GR.y, w: GR.w, h: GR.h, u: p, color: PAL.paper, fg: PAL.ink, label: 'SCALE Y',
       range: [0.3, 1.5], fns: [(uu) => sqDrop(uu * BEAT).sy],
     });
   }
@@ -130,11 +161,11 @@ export async function createPrinciples({ W, H }) {
       return lerp(62, 125, s);
     };
     const widths = [...word].map((_, i) => wAt(u, i));
-    const size = 262;
-    const L = layoutLetters(word, 900, widths, size, -3);
+    const size = LY.st.size;
+    const L = layoutLetters(word, 900, widths, size, -3 * (size / 262));
     const sxAll = 1 + 0.06 * wobble(u - 0.06, 2.2, 0.35);
     ctx.save();
-    ctx.translate(W / 2, 650);
+    ctx.translate(W / 2, LY.st.base);
     ctx.scale(sxAll, 1 / sxAll);
     ctx.fillStyle = PAL.ink;
     for (const l of L) {
@@ -149,27 +180,28 @@ export async function createPrinciples({ W, H }) {
     ctx.strokeStyle = rgba(PAL.cobalt, 0.9);
     ctx.fillStyle = PAL.cobalt;
     ctx.lineWidth = 2;
-    const y = 715, x0 = W / 2 - (total / 2) * sxAll, x1 = W / 2 + (total / 2) * sxAll;
+    const y = LY.st.base + LY.st.measY, x0 = W / 2 - (total / 2) * sxAll, x1 = W / 2 + (total / 2) * sxAll;
     ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
     ctx.fillRect(x0 - 1, y - 10, 2, 20); ctx.fillRect(x1 - 1, y - 10, 2, 20);
-    ctx.font = mono(600, 16); ctx.letterSpacing = '2px'; ctx.textAlign = 'center';
-    ctx.fillText(`wdth ${Math.round(widths[0])}`, W / 2, y + 36);
+    ctx.font = mono(600, LY.st.fs); ctx.letterSpacing = '2px'; ctx.textAlign = 'center';
+    ctx.fillText(`wdth ${Math.round(widths[0])}`, W / 2, y + LY.st.label);
     ctx.restore();
     annotate(ctx, PRINCIPLES[1], PAL.ink, PAL.orange, p);
     graph(ctx, {
-      x: 120, y: 820, w: 300, h: 120, u: p, color: PAL.orange, fg: PAL.ink, label: 'WIDTH AXIS',
+      x: GR.x, y: GR.y, w: GR.w, h: GR.h, u: p, color: PAL.orange, fg: PAL.ink, label: 'WIDTH AXIS',
       range: [50, 140], fns: [(uu) => wAt(uu * BEAT, n - 1), (uu) => wAt(uu * BEAT, 0)],
     });
   }
 
   // Card 3 — ANTICIPATION: winds back, then releases (lime / ink)
   const antX = (uu) => {
+    const A = LY.an.amp;
     const wind = ease.inOutCubic(clamp(uu / 0.17));
     const rel = clamp((uu - 0.17) / 0.06);
     const settle = uu - 0.23;
-    if (uu < 0.17) return -150 * wind;
-    if (uu < 0.23) return lerp(-150, 110, ease.inQuad(rel));
-    return 110 * Math.exp(-settle * 9) * Math.cos(settle * 17);
+    if (uu < 0.17) return -150 * A * wind;
+    if (uu < 0.23) return lerp(-150 * A, 110 * A, ease.inQuad(rel));
+    return 110 * A * Math.exp(-settle * 9) * Math.cos(settle * 17);
   };
   function cardAnticipation(ctx, u, p) {
     ctx.fillStyle = PAL.lime;
@@ -179,10 +211,10 @@ export async function createPrinciples({ W, H }) {
     const skew = clamp(-v / 9000, -0.35, 0.35) + (u < 0.17 ? 0.12 * ease.inOutCubic(u / 0.17) : 0);
     const sx = u < 0.17 ? 1 - 0.1 * ease.inOutCubic(u / 0.17) : 1 + clamp(Math.abs(v) / 20000, 0, 0.14);
     ctx.save();
-    ctx.translate(W / 2 + x, 640);
+    ctx.translate(W / 2 + x, LY.an.base);
     ctx.transform(1, 0, -skew, 1, 0, 0);
     ctx.scale(sx, 1 / Math.sqrt(sx));
-    ctx.font = archivo(900, 72, 232);
+    ctx.font = archivo(900, LY.an.width, LY.an.size);
     ctx.letterSpacing = '-2px';
     ctx.textAlign = 'center';
     ctx.fillStyle = PAL.ink;
@@ -190,62 +222,66 @@ export async function createPrinciples({ W, H }) {
     ctx.restore();
     annotate(ctx, PRINCIPLES[2], PAL.ink, PAL.cobalt, p);
     graph(ctx, {
-      x: 120, y: 820, w: 300, h: 120, u: p, color: PAL.cobalt, fg: PAL.ink, label: 'POSITION X',
-      range: [-190, 150], fns: [(uu) => antX(uu * BEAT)],
+      x: GR.x, y: GR.y, w: GR.w, h: GR.h, u: p, color: PAL.cobalt, fg: PAL.ink, label: 'POSITION X',
+      range: [-190 * LY.an.amp, 150 * LY.an.amp], fns: [(uu) => antX(uu * BEAT)],
     });
   }
 
   // Card 4 — FOLLOW THROUGH: the word travels as a group and stops; each letter's
   // top keeps going (inertia ∝ acceleration) and springs back — the tail drags longest.
-  const followX = (uu, i) => 1350 * (1 - spring(uu - i * 0.011, 2.7, 1.0)); // critically damped: no pile-ups
+  const FO = LY.fo;
+  const followX = (uu, i) => FO.travel * (1 - spring(uu - i * 0.011, 2.7, 1.0)); // critically damped: no pile-ups
   const followLean = (uu, i, n) => {
     const h = 1 / 480, d = uu - i * 0.018;
     const a = (followX(d + h, i) - 2 * followX(d, i) + followX(d - h, i)) / (h * h);
     const tail = 1 + (i / (n - 1)) * 0.8;
     const settle = d - 0.2;
     const ring = settle > 0 ? 0.2 * tail * Math.exp(-settle * 6) * Math.sin(settle * 24) : 0;
-    return clamp((a / 0.9e6) * tail + ring, -0.5, 0.5);
+    return clamp((a / 0.9e6) * tail * (1350 / FO.travel) + ring, -0.5, 0.5);
   };
+  // letters with centred x per line, a baseline y and a running index (spaces skipped)
   function layoutFollow() {
-    const { word, weight, width, size } = FOLLOW;
-    return layoutLetters(word, weight, Array(word.length).fill(width), size, 3);
+    const out = [];
+    let idx = 0;
+    FO.lines.forEach((line, li) => {
+      const L = layoutLetters(line, 900, Array(line.length).fill(FO.width), FO.size, 3 * (FO.size / 206));
+      for (const l of L) {
+        if (l.ch === ' ') { idx++; continue; }
+        out.push({ ...l, y: FO.top + li * FO.size * 0.98, i: idx++ });
+      }
+    });
+    return { letters: out, n: idx };
   }
+  const FL = layoutFollow();
+  followCenterY = V ? FO.top + ((FO.lines.length - 1) * FO.size * 0.98) / 2 - FO.size * 0.36 : 560;
   function cardFollow(ctx, u, p) {
     ctx.fillStyle = PAL.cobalt;
     ctx.fillRect(0, 0, W, H);
-    const { word, weight, width, size, baseline } = FOLLOW;
-    const n = word.length;
-    const L = layoutFollow();
+    const { letters, n } = FL;
     ctx.save();
-    ctx.translate(W / 2, baseline);
-    ctx.font = archivo(weight, width, size);
+    ctx.font = archivo(900, FO.width, FO.size);
     ctx.letterSpacing = '0px';
     ctx.fillStyle = PAL.paper;
-    for (let i = 0; i < n; i++) {
-      const l = L[i];
-      if (l.ch === ' ') continue;
+    for (const l of letters) {
       ctx.save();
-      ctx.translate(l.x + l.a / 2 + followX(u, i), 0);
-      ctx.transform(1, 0, followLean(u, i, n), 1, 0, 0);
+      ctx.translate(W / 2 + l.x + l.a / 2 + followX(u, l.i), l.y);
+      ctx.transform(1, 0, followLean(u, l.i, n), 1, 0, 0);
       ctx.fillText(l.ch, -l.a / 2, 0);
       ctx.restore();
     }
     ctx.restore();
     annotate(ctx, PRINCIPLES[3], PAL.paper, PAL.lime, p);
     graph(ctx, {
-      x: 120, y: 820, w: 300, h: 120, u: p, color: PAL.lime, fg: PAL.paper, label: 'SKEW \u00D714',
+      x: GR.x, y: GR.y, w: GR.w, h: GR.h, u: p, color: PAL.lime, fg: PAL.paper, label: 'SKEW \u00D714',
       range: [-0.55, 0.55], fns: [(uu) => followLean(uu * BEAT, 0, n), (uu) => followLean(uu * BEAT, 6, n), (uu) => followLean(uu * BEAT, n - 1, n)],
     });
   }
   // exposed for the finale: the settled word, drawn exactly as on the card
   drawFollowSettled = (ctx) => {
-    const { weight, width, size, baseline } = FOLLOW;
-    const L = layoutFollow();
     ctx.save();
-    ctx.translate(W / 2, baseline);
-    ctx.font = archivo(weight, width, size);
+    ctx.font = archivo(900, FO.width, FO.size);
     ctx.letterSpacing = '0px';
-    for (const l of L) if (l.ch !== ' ') ctx.fillText(l.ch, l.x, 0);
+    for (const l of FL.letters) ctx.fillText(l.ch, W / 2 + l.x, l.y);
     ctx.restore();
   };
 
@@ -275,7 +311,7 @@ export async function createPrinciples({ W, H }) {
         // skewed wipe: the next card slides over the last one, led by an accent band
         CARDS[i - 1](ctx, BEAT, 1);
         const p = ease.outCubic(clamp(uF / WIPE));
-        const SK = 260;
+        const SK = LY.sk;
         const edge = lerp(W + SK + 40, -SK - 40, p);
         const accent = [PAL.lime, PAL.orange, PAL.paper][i - 1];
         ctx.save();

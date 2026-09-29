@@ -9,6 +9,7 @@
     "audio": "node showreel/audio/synth.mjs",
     "stills": "node tools/stills.mjs",
     "render": "node tools/events.mjs && node showreel/audio/synth.mjs && node tools/render.mjs",
+    "render:vertical": "node tools/events.mjs --format vertical && FORMAT=vertical node showreel/audio/synth.mjs && node tools/render.mjs --format vertical",
     "preview": "npx http-server . -p 8080 -c-1 -o /showreel/index.html?live"
   },
   "devDependencies": {

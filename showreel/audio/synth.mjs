@@ -1,13 +1,15 @@
 // Procedural soundtrack: every sample synthesized from scratch (no samples, no libs).
 // 128 BPM nu-disco in C major, scored to the renderer's own event times.
 //   node tools/events.mjs && node showreel/audio/synth.mjs
+//   vertical: node tools/events.mjs --format vertical && FORMAT=vertical node showreel/audio/synth.mjs
 import fs from 'node:fs';
 import { BEAT, DURATION, CHORDS } from '../src/timeline.js';
 
 const SR = 48000;
 const LEN = Math.round(DURATION * SR);
 const PAD = SR * 3; // room for tails (trimmed at the end)
-const events = JSON.parse(fs.readFileSync(new URL('./events.json', import.meta.url), 'utf8'));
+const SUFFIX = process.env.FORMAT === 'vertical' ? '-vertical' : '';
+const events = JSON.parse(fs.readFileSync(new URL(`./events${SUFFIX}.json`, import.meta.url), 'utf8'));
 const ev = (type) => events.filter((e) => e.type === type);
 const b2s = (b) => b * BEAT;
 const TAU = Math.PI * 2;
@@ -761,8 +763,8 @@ function writeWav(path, L, R, n) {
   h.write('data', 36); h.writeUInt32LE(data.length, 40);
   fs.writeFileSync(path, Buffer.concat([h, data]));
 }
-const out = process.env.OUT ? process.env.OUT : new URL('./soundtrack.wav', import.meta.url);
+const out = process.env.OUT ? process.env.OUT : new URL(`./soundtrack${SUFFIX}.wav`, import.meta.url);
 writeWav(out, master.L, master.R, LEN);
 let pk = 0;
 for (let i = 0; i < LEN; i++) pk = Math.max(pk, Math.abs(master.L[i]), Math.abs(master.R[i]));
-console.log(`soundtrack.wav  ${DURATION.toFixed(3)} s  @${SR} Hz  peak ${(20 * Math.log10(pk)).toFixed(2)} dBFS`);
+console.log(`${String(out).split('/').pop()}  ${DURATION.toFixed(3)} s  @${SR} Hz  peak ${(20 * Math.log10(pk)).toFixed(2)} dBFS`);

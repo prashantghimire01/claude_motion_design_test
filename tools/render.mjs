@@ -1,9 +1,9 @@
 // Full render: N parallel headless browsers -> PNG frames -> ffmpeg (H.264 + AAC).
-//   node tools/render.mjs [--workers 3] [--samples 6] [--from 0] [--to 900] [--skip-existing] [--encode-only] [--no-encode]
+//   node tools/render.mjs [--format vertical] [--workers 3] [--samples 6] [--from 0] [--to 900] [--skip-existing] [--encode-only] [--no-encode]
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { serve, openReel, grabFrame, ffmpegPath, args, ROOT } from './common.mjs';
+import { serve, openReel, grabFrame, ffmpegPath, args, ROOT, FORMATS, formatOf } from './common.mjs';
 
 const a = args();
 const FRAMES = 900;
@@ -11,8 +11,10 @@ const from = +(a.from ?? 0);
 const to = +(a.to ?? FRAMES);
 const workers = +(a.workers || 3);
 const samples = +(a.samples || 6);
-const framesDir = path.resolve(a.dir || path.join(ROOT, 'output', 'frames'));
-const outFile = path.resolve(a.out || path.join(ROOT, 'output', 'claude-motion-reel-2026.mp4'));
+const format = formatOf(a.format);
+const { suffix } = FORMATS[format];
+const framesDir = path.resolve(a.dir || path.join(ROOT, 'output', `frames${suffix}`));
+const outFile = path.resolve(a.out || path.join(ROOT, 'output', `claude-motion-reel-2026${suffix}.mp4`));
 fs.mkdirSync(framesDir, { recursive: true });
 const frameFile = (f) => path.join(framesDir, `${String(f).padStart(4, '0')}.png`);
 
@@ -25,7 +27,7 @@ if (!a['encode-only']) {
   let done = 0;
   await Promise.all(
     Array.from({ length: workers }, async (_, w) => {
-      const { browser, page } = await openReel(srv.port, { gpu: !!a.gpu });
+      const { browser, page } = await openReel(srv.port, { gpu: !!a.gpu, format });
       for (let i = w; i < todo.length; i += workers) {
         const f = todo[i];
         fs.writeFileSync(frameFile(f), await grabFrame(page, f, samples));
@@ -47,7 +49,7 @@ if (a['no-encode']) process.exit(0);
 // Encode. Optional luma grain (--grain N) is added here rather than in the PNGs;
 // it is off by default: temporal grain is near-incompressible and flat motion
 // graphics don't need it (the renderer already dithers its gradients).
-const audio = path.join(ROOT, 'showreel', 'audio', 'soundtrack.wav');
+const audio = [`soundtrack${suffix}.wav`, 'soundtrack.wav'].map((f) => path.join(ROOT, 'showreel', 'audio', f)).find((f) => fs.existsSync(f)) || '';
 const hasAudio = fs.existsSync(audio);
 const grain = +(a.grain ?? 0);
 const vf = [

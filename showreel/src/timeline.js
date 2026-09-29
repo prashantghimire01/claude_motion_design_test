@@ -2,8 +2,18 @@
 // Everything is expressed in beats at 128 BPM — 32 beats (8 bars) = exactly 15.000 s.
 // Imported by the browser renderer and by the Node soundtrack synth.
 
-export const W = 1920;
-export const H = 1080;
+// Output formats. Every shot re-lays itself out for the active one.
+export const FORMATS = {
+  landscape: { W: 1920, H: 1080, suffix: '' },
+  vertical: { W: 1080, H: 1920, suffix: '-vertical' },
+};
+export let W = 1920;
+export let H = 1080;
+export let FORMAT = 'landscape';
+export function setFormat(name) {
+  FORMAT = FORMATS[name] ? name : 'landscape';
+  ({ W, H } = FORMATS[FORMAT]);
+}
 export const FPS = 60;
 export const BPM = 128;
 export const BEAT = 60 / BPM; // 0.46875 s

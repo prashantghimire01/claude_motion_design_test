@@ -58,6 +58,12 @@ export async function createWorld({ comp, W, H }) {
     return [x0, y0, x1 - x0, y1 - y0];
   }
   const aspect = W / H;
+  // Per-format framing: visible width (world units = tiles) through the 2D phases.
+  const V = H > W;
+  const HANDOFF_R = V ? 96 : 88; // ball radius (px) handed over from the intro's portal zoom
+  const VW = V
+    ? { a0: 4.3, a1: 3.55, a2: 3.35, b1: 7.4, drift: 0.7 }
+    : { a0: 6.2, a1: 5.4, a2: 5.15, b1: 12.8, drift: 1.2 };
   const palLin = PAL_KEYS.map((k) => linRGB(PAL[k]));
   const T = (b) => b * BEAT;
 
@@ -116,12 +122,12 @@ export async function createWorld({ comp, W, H }) {
   function camera(b) {
     let target, Vw, roll = 0;
     if (b < 12) {
-      Vw = b < 8.6 ? lerp(6.2, 5.4, ease.outCubic(prog(b, 8, 8.6))) : lerp(5.4, 5.15, prog(b, 8.6, 12));
+      Vw = b < 8.6 ? lerp(VW.a0, VW.a1, ease.outCubic(prog(b, 8, 8.6))) : lerp(VW.a1, VW.a2, prog(b, 8.6, 12));
       target = [0, 0, 0];
       roll = 0;
     } else {
       const z1 = EASE.snap(prog(b, 12.0, 13.1));
-      Vw = lerp(5.15, 12.8, z1) + lerp(0, 1.2, ease.inOutSine(prog(b, 13.1, 16.2)));
+      Vw = lerp(VW.a2, VW.b1, z1) + lerp(0, VW.drift, ease.inOutSine(prog(b, 13.1, 16.2)));
       target = [lerp(0, 0.5, ease.inOutSine(prog(b, 12.5, 16.2))), 0, lerp(0, 0.25, ease.inOutSine(prog(b, 12.5, 16.2)))];
       roll = -5 * DEG * z1 + 2 * DEG * ease.inOutSine(prog(b, 13.1, 16));
     }
@@ -161,7 +167,7 @@ export async function createWorld({ comp, W, H }) {
   }
 
   // ------------------------------------------------------------ mitosis → core
-  const r0 = 88 / (W / 6.2);
+  const r0 = HANDOFF_R / (W / VW.a0);
   const DANCE = CORE.map(([type, bg, fg]) => (bg === 3 ? fg : bg));
   function blobs(b) {
     const t = T(b);
@@ -258,7 +264,7 @@ export async function createWorld({ comp, W, H }) {
       const p = dt / 0.7;
       ctx.save();
       ctx.translate(W / 2, H / 2);
-      const R = lerp(90, 1100, ease.outCubic(p));
+      const R = lerp(HANDOFF_R, Math.hypot(W, H) * 0.5, ease.outCubic(p));
       ctx.lineWidth = lerp(28, 0.5, ease.outQuad(p));
       ctx.strokeStyle = rgba(PAL.paper, 1 - p);
       ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.stroke();
@@ -290,7 +296,8 @@ export async function createWorld({ comp, W, H }) {
     const fr = (x) => x - Math.floor(x);
     const hash = (x, y) => { let px = fr(x * 123.34), py = fr(y * 456.21); const d = px * (px + 45.32) + py * (py + 45.32); px += d; py += d; return fr(px * py); };
     const pops = [];
-    for (let y = -4; y <= 4; y++) for (let x = -7; x <= 7; x++) {
+    const [nx, ny] = V ? [4, 7] : [7, 4];
+    for (let y = -ny; y <= ny; y++) for (let x = -nx; x <= nx; x++) {
       if (Math.abs(x) <= 1 && Math.abs(y) <= 1) continue;
       const dist = Math.hypot(x, y);
       pops.push(WORLD.zoomOut + 0.05 + dist * 0.085 + hash(x + 3.77, y + 3.77) * 0.05);

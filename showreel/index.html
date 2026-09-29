@@ -8,9 +8,10 @@
   :root { --ink: #0E0E10; --paper: #F3EEE3; --orange: #FF5B1F; }
   html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); }
   body { display: grid; place-items: center; font: 500 13px/1.4 ui-monospace, monospace; overflow: hidden; }
-  #out { display: block; width: 1920px; height: 1080px; }
+  #out { display: block; }
   body.live #out { width: min(100vw, calc(100vh * 16 / 9)); height: auto; aspect-ratio: 16 / 9; cursor: pointer; }
-  #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); opacity: .7; letter-spacing: .12em; display: none; }
+  body.live.vertical #out { width: min(100vw, calc(100vh * 9 / 16)); aspect-ratio: 9 / 16; }
+  #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); opacity: .7; letter-spacing: .12em; white-space: nowrap; display: none; }
   body.live #hint { display: block; }
 </style>
 </head>
@@ -20,8 +21,13 @@
 <script type="module">
   import { init, renderFrame, reelEvents, TL } from './src/main.js';
   const params = new URLSearchParams(location.search);
-  await init();
+  const format = params.get('format') === 'vertical' ? 'vertical' : 'landscape';
   const out = document.getElementById('out');
+  const F = TL.FORMATS[format];
+  out.width = F.W; out.height = F.H;
+  out.style.width = F.W + 'px'; out.style.height = F.H + 'px';
+  if (format === 'vertical') document.body.classList.add('vertical');
+  await init(format);
 
   // Offline render API (used by tools/render.mjs and tools/stills.mjs)
   window.renderFrameToPNG = (f, samples = 6, shutter = 0.5) => {
@@ -33,7 +39,8 @@
 
   if (params.has('live')) {
     document.body.classList.add('live');
-    const audio = new Audio('./audio/soundtrack.wav');
+    out.style.width = ''; out.style.height = '';
+    const audio = new Audio(`./audio/soundtrack${F.suffix}.wav`);
     let playing = false, t0 = 0, offset = 0;
     const now = () => (playing ? (performance.now() - t0) / 1000 + offset : offset);
     const toggle = () => {

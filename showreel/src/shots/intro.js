@@ -7,14 +7,14 @@ import { clamp, lerp, prog, ease, spring, wobble, PAL, rgba, TAU, EASE } from '.
 import { archivo, serif, mono } from '../fonts.js';
 import { BEAT, BOUNCE, LETTER_RISE, HOP, ZOOM, FPS } from '../timeline.js';
 
-const S = 330; // display size (px)
+let S = 330; // display size (px) — set per format in createIntro
 const WEIGHT = 800;
 const TRACK = -0.015; // em
-const FLOOR = 646;
+let FLOOR = 646;
 const WORD = ['m', 'o', 't', 'ı', 'o', 'n'];
 const I_IDX = 3;
 const O_IDX = 4;
-const G = 6400; // px/s² — gravity for the bounce
+let G = 6400; // px/s² — gravity for the bounce
 
 // -- glyph measurement ---------------------------------------------------------
 function inkBox(ch, font) {
@@ -74,6 +74,19 @@ function measure() {
 }
 
 export async function createIntro({ W, H }) {
+  // Per-format layout. Vertical: narrower word, lower floor, a taller drop
+  // (stronger gravity keeps the same beat-locked bounce timing).
+  const V = H > W;
+  S = V ? 236 : 330;
+  FLOOR = V ? Math.round(H * 0.54) : 646;
+  G = V ? 8600 : 6400;
+  const K = S / 330; // scale vs the landscape design
+  const HANDOFF_R = V ? 96 : 88; // on-screen ball radius at the cut into the world
+  const X_START = V ? 110 : 250;
+  const FOCUS_X0 = X_START + (V ? 190 : 330); // the camera's opening framing
+  const FOCUS_DY = V ? 205 : 150;
+  const LINE_HALF = V ? W * 0.44 : 760;
+  const TK = V ? 1.3 : 1; // annotation type scale
   const geo = measure();
   const R = Math.max(geo.dot.w, geo.dot.h) * 0.56; // ball radius ≈ tittle (circle reads lighter than a square)
   const tittleDY = geo.dot.cy; // relative to baseline (negative = up)
@@ -110,7 +123,6 @@ export async function createIntro({ W, H }) {
   const lands = BOUNCE.landings.map((b) => b * BEAT);
   const tDrop = BOUNCE.dropStart * BEAT;
   const REST_Y = FLOOR - R;
-  const X_START = 250;
   // horizontal: constant speed per airtime, friction 0.72 at each impact, lands exactly on the ı
   const segs = [[tDrop, lands[0]]];
   for (let i = 1; i < lands.length; i++) segs.push([lands[i - 1], lands[i]]);
@@ -198,7 +210,7 @@ export async function createIntro({ W, H }) {
       // Hop: parabolic arc from tittle to the portal, shrinking into depth.
       const p = prog(b, HOP.launch, HOP.dive);
       const x = lerp(TITTLE.x, PORTAL.x, ease.inOutSine(p));
-      const lift = 190;
+      const lift = 190 * K;
       const y = lerp(TITTLE.y, PORTAL.y, p * p) - lift * 4 * p * (1 - p);
       return { x, y, s: lerp(1, 0.52, ease.inCubic(p)), layer: 'front', ground: 1e9 };
     }
@@ -261,8 +273,8 @@ export async function createIntro({ W, H }) {
       const dt = t - lands[i];
       if (dt < 0 || dt > 0.9) continue;
       const lx = bounceX(lands[i]);
-      const amp = (i === 0 ? 30 : 30 * Math.pow(0.5, i)) * Math.exp(-dt * 5.5) * Math.cos(dt * 34 - 0.25);
-      const sig = 70 + dt * 260;
+      const amp = (i === 0 ? 30 : 30 * Math.pow(0.5, i)) * K * Math.exp(-dt * 5.5) * Math.cos(dt * 34 - 0.25);
+      const sig = (70 + dt * 260) * K;
       d += amp * Math.exp(-((x - lx) ** 2) / (2 * sig * sig));
     }
     return d;
@@ -276,7 +288,7 @@ export async function createIntro({ W, H }) {
     const tight = lerp(1.55, 1.0, open);
     const s = Math.exp(Math.log(80) * e) * tight * lerp(1, 1.035, prog(b, 4.8, ZOOM.from));
     const pan = ease.inOutSine(prog(b, 0.15, 3.3));
-    const bx = lerp(X_START + 330, TITTLE.x, pan), by = FLOOR - 150;
+    const bx = lerp(FOCUS_X0, TITTLE.x, pan), by = FLOOR - FOCUS_DY;
     let F = { x: lerp(bx, WORD_C.x, open), y: lerp(by, WORD_C.y - 30, open) };
     const fp = ease.inOutCubic(prog(b, 6.2, 7.7));
     F = { x: lerp(F.x, PORTAL.x, fp), y: lerp(F.y, PORTAL.y, fp) };
@@ -297,8 +309,8 @@ export async function createIntro({ W, H }) {
     // Anticipation dip of the ı stem just before the hop
     let dip = 0;
     if (i === I_IDX) {
-      dip = 10 * ease.outCubic(prog(b, HOP.anticipate, HOP.launch)) * (b < HOP.launch ? 1 : 0);
-      if (b >= HOP.launch) dip = 10 * wobble(t - HOP.launch * BEAT, 3, 0.3) - 0;
+      dip = 10 * K * ease.outCubic(prog(b, HOP.anticipate, HOP.launch)) * (b < HOP.launch ? 1 : 0);
+      if (b >= HOP.launch) dip = 10 * K * wobble(t - HOP.launch * BEAT, 3, 0.3);
     }
     return { dy: (1 - p) * rise + dip, rot, sy: stretch, vis: true };
   }
@@ -337,9 +349,9 @@ export async function createIntro({ W, H }) {
     const L = layout(100 + 12 * Math.sin(Math.PI * prog(b, 5.25, 5.95)) * ease.outCubic(prog(b, 5.25, 5.6)));
     const floorOn = ease.outExpo(prog(t, 0.05, 0.9));
     const floorOff = ease.inOutCubic(prog(b, 6.25, 6.9));
-    const fx0 = X_START + 330;
-    const lineL = lerp(lerp(fx0, W / 2 - 760, floorOn), W / 2, floorOff);
-    const lineR = lerp(lerp(fx0, W / 2 + 760, floorOn), W / 2, floorOff);
+    const fx0 = FOCUS_X0;
+    const lineL = lerp(lerp(fx0, W / 2 - LINE_HALF, floorOn), W / 2, floorOff);
+    const lineR = lerp(lerp(fx0, W / 2 + LINE_HALF, floorOn), W / 2, floorOff);
 
     // Portal: cobalt iris opening inside the second "o"'s counter.
     const portalOpen = ease.outBack(prog(b, HOP.dive - 0.06, HOP.dive + 0.22), 1.4);
@@ -355,7 +367,7 @@ export async function createIntro({ W, H }) {
       if (st.layer === 'portal') {
         // During the zoom, the ball recedes: keep its on-screen size under control.
         const pz = prog(b, ZOOM.from, ZOOM.to);
-        const screenR = lerp(R * st.s, 88, Math.pow(pz, 2.2));
+        const screenR = lerp(R * st.s, HANDOFF_R, Math.pow(pz, 2.2));
         drawBall(ctx, { ...st, x: PORTAL.x, y: PORTAL.y, s: screenR / R / cam.s, squash: 0, stretch: 1 });
       }
       ctx.restore();
@@ -411,8 +423,8 @@ export async function createIntro({ W, H }) {
     {
       const fade = 1 - prog(b, 4.2, 4.9);
       ctx.save();
-      ctx.font = mono(500, 13);
-      ctx.letterSpacing = '1px';
+      ctx.font = mono(500, 13 * TK);
+      ctx.letterSpacing = `${TK}px`;
       ctx.textAlign = 'center';
       for (let i = 0; i < lands.length; i++) {
         const age = t - lands[i];
@@ -421,10 +433,10 @@ export async function createIntro({ W, H }) {
         if (a <= 0) continue;
         const lx = bounceX(lands[i]);
         ctx.fillStyle = rgba(PAL.orange, 0.9 * a);
-        ctx.fillRect(lx - 1, FLOOR + 12, 2, 12 + (i === 0 ? 8 : 0));
+        ctx.fillRect(lx - TK, FLOOR + 12 * TK, 2 * TK, (12 + (i === 0 ? 8 : 0)) * TK);
         if (i < 4) {
           ctx.fillStyle = rgba(PAL.paper, 0.55 * a);
-          ctx.fillText(`f${Math.round(lands[i] * FPS)}`, lx, FLOOR + 50);
+          ctx.fillText(`f${Math.round(lands[i] * FPS)}`, lx, FLOOR + 50 * TK);
         }
       }
       ctx.restore();
@@ -467,12 +479,12 @@ export async function createIntro({ W, H }) {
       if (inP > 0 && outP < 1) {
         const text = 'it all starts with a bouncing ball.';
         ctx.save();
-        ctx.font = serif(46);
+        ctx.font = serif(V ? 42 : 46);
         ctx.letterSpacing = '0px';
         ctx.textAlign = 'left';
         const tw = ctx.measureText(text).width;
         let x = W / 2 - tw / 2;
-        const y = FLOOR + 112;
+        const y = FLOOR + (V ? 104 : 112);
         for (let i = 0; i < text.length; i++) {
           const ch = text[i];
           const cw = ctx.measureText(ch).width;

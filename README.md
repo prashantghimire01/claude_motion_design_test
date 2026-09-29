@@ -5,7 +5,8 @@ no stock footage, no samples, no AI video generation: 900 frames produced by a
 deterministic renderer where every frame is a pure function of time, and a
 soundtrack synthesized sample-by-sample and scored to the renderer's own events.
 
-▶ **[`output/claude-motion-reel-2026.mp4`](output/claude-motion-reel-2026.mp4)** — 1920×1080 · 60 fps · H.264 + AAC · 15.000 s
+▶ **[`output/claude-motion-reel-2026.mp4`](output/claude-motion-reel-2026.mp4)** — landscape 1920×1080 · 60 fps · H.264 + AAC · 15.000 s
+▶ **[`output/claude-motion-reel-2026-vertical.mp4`](output/claude-motion-reel-2026-vertical.mp4)** — vertical 1080×1920 for Reels / Shorts / TikTok · same timing and score
 
 ![Contact sheet](output/contact-sheet.jpg)
 
@@ -23,6 +24,17 @@ the full stop in the name. Everything is locked to **128 BPM** (8 bars = exactly
 | 8–20 | 3.75–9.38 | **Shape → Systems → Dimension** — one continuous shader “oner”: the ball splits 1 → 3 → 9 (SDF metaballs), the blobs morph into Bauhaus motifs, coin-flip into their colours and claim a 3×3 grid; the camera pulls back to an infinite generative tile system with rotation / flip / morph waves; then the flat grid tilts into 3D and a lacquered ball drops onto it, rippling the tiles, before launching into the lens | SDF shape design, generative systems, 3D, one-shot transitions |
 | 20–24 | 9.38–11.25 | **Principles** — SQUASH, STRETCH, ANTICIPATION, FOLLOW THROUGH: each word *performs* its principle, with a live graph-editor widget plotting the real curve driving it | The 12 principles, applied to type |
 | 24–32 | 11.25–15.00 | **Generative → Hello** — the last word shatters into 6,200 particles that spiral into a depth-sorted galaxy around the ball, accelerate with the riser and slam into the wordmark on the final downbeat; the ball returns as the period: **Claude.** | Particles, build & release, end card |
+
+## Two formats, one timeline
+
+The vertical cut is a re-layout, not a crop: every shot reads the active format
+(`?format=vertical`) and re-composes itself for 9:16 while the choreography,
+physics and score stay identical. The bounce drops from higher (stronger gravity
+keeps it on the beat), words are auto-fit to the frame width, FOLLOW / THROUGH
+stacks onto two lines, the camera frames the 3×3 core by width, the galaxy
+becomes a rounder, tilted disc, the end card stacks its details, and the HUD
+grows for phone screens. Each format exports its own event times, so the
+soundtrack is re-scored to the frame for each.
 
 ## Under the hood
 
@@ -47,9 +59,11 @@ Requirements: Node 18+, Playwright's Chromium, and ffmpeg (`ffmpeg` on `PATH`, `
 ```bash
 npm install                      # playwright (browsers: npx playwright install chromium)
 npm run render                   # events → soundtrack → 900 frames → output/claude-motion-reel-2026.mp4
+npm run render:vertical          # the 9:16 re-layout → output/claude-motion-reel-2026-vertical.mp4
 node tools/render.mjs --gpu      # use the machine's GPU instead of SwiftShader (much faster)
 node tools/stills.mjs --range 0:899:15 --sheet sheet.png --cols 10   # contact sheet for review
 npm run preview                  # real-time playback in the browser (1 sample, click to play)
+                                 # vertical preview: /showreel/index.html?live&format=vertical
 ```
 
 ## Credits

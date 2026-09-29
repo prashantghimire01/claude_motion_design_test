@@ -29,16 +29,23 @@ function timecode(t) {
   return `00:00:${pad(s)}:${pad(ff)}`;
 }
 
-function chip(ctx, x, y, w, align, color) {
+function chip(ctx, x, y, w, align, color, k = 1) {
   if (!color) return;
-  const pad = 9;
+  const pad = 9 * k;
   const x0 = align === 'right' ? x - w - pad : x - pad;
   ctx.save();
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.roundRect(x0, y - 18, w + pad * 2, 27, 4);
+  ctx.roundRect(x0, y - 18 * k, w + pad * 2, 27 * k, 4 * k);
   ctx.fill();
   ctx.restore();
+}
+
+// HUD metrics per format: vertical gets bigger type (it's watched on phones)
+// and deeper insets, clear of the corners that phone UIs cover.
+function hudLayout(W, H) {
+  if (H > W) return { k: 1.3, M: 64, top: 128, bottom: H - 120, cm: 40, arm: 24 };
+  return { k: 1, M: 54, top: 66, bottom: H - 54, cm: 30, arm: 18, nameGap: 96, trackGap: 164 };
 }
 
 export function drawHUD(ctx, env, style) {
@@ -47,22 +54,22 @@ export function drawHUD(ctx, env, style) {
   const color = style?.color || 'rgba(243,238,227,0.78)';
   const alpha = style?.alpha ?? 1;
   if (alpha <= 0) return;
-  const M = 54;
   const W = ctx.canvas.width, H = ctx.canvas.height;
+  const { k, M, top, bottom, cm, arm: ARM, nameGap, trackGap } = hudLayout(W, H);
+  const fs = 17 * k;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
   ctx.textBaseline = 'alphabetic';
-  ctx.font = mono(500, 17);
-  ctx.letterSpacing = '2.5px';
+  ctx.font = mono(500, fs);
+  ctx.letterSpacing = `${2.5 * k}px`;
 
   const intro = prog(t, 0.05, 0.75);
 
   // Corner marks (draw on)
-  const arm = 18 * ease.outCubic(prog(t, 0.0, 0.5));
-  ctx.lineWidth = 1.5;
-  const cm = 30;
+  const arm = ARM * ease.outCubic(prog(t, 0.0, 0.5));
+  ctx.lineWidth = 1.5 * k;
   const corners = [[cm, cm, 1, 1], [W - cm, cm, -1, 1], [cm, H - cm, 1, -1], [W - cm, H - cm, -1, -1]];
   ctx.beginPath();
   for (const [x, y, sx, sy] of corners) {
@@ -72,37 +79,42 @@ export function drawHUD(ctx, env, style) {
   }
   ctx.stroke();
 
+  // layout metrics
+  ctx.font = mono(700, fs);
+  const nameX2 = M + (nameGap ?? ctx.measureText('CLAUDE').width + 20 * k);
+  ctx.font = mono(400, fs);
+  const titleW = ctx.measureText('MOTION DESIGNER').width;
+  const reelW = ctx.measureText('SHOWREEL \u201926').width;
+  const trackX = M + (trackGap ?? ctx.measureText('00:00:00:00').width + 24 * k);
+  const trackW = 150 * k;
+
   // Legibility chips over busy backgrounds
   if (style?.chip) {
-    ctx.font = mono(700, 17);
-    const w1 = ctx.measureText('CLAUDE').width;
-    ctx.font = mono(400, 17);
-    chip(ctx, M, M + 12, 96 + ctx.measureText('MOTION DESIGNER').width, 'left', style.chip);
-    chip(ctx, W - M, M + 12, ctx.measureText('SHOWREEL \u201926').width, 'right', style.chip);
-    chip(ctx, M, H - M, 164 + 150, 'left', style.chip);
-    chip(ctx, W - M, H - M, ctx.measureText('00/00  PRINCIPLES').width + 30, 'right', style.chip);
+    chip(ctx, M, top, nameX2 - M + titleW, 'left', style.chip, k);
+    chip(ctx, W - M, top, reelW, 'right', style.chip, k);
+    chip(ctx, M, bottom, trackX - M + trackW, 'left', style.chip, k);
+    chip(ctx, W - M, bottom, ctx.measureText('00/00  PRINCIPLES').width + 30 * k, 'right', style.chip, k);
     ctx.fillStyle = color;
   }
 
   // Top-left: name
   ctx.textAlign = 'left';
-  ctx.font = mono(700, 17);
-  ctx.fillText(scramble('CLAUDE', prog(t, 0.05, 0.4), t, 1), M, M + 12);
-  ctx.font = mono(400, 17);
-  ctx.fillText(scramble('MOTION DESIGNER', prog(t, 0.15, 0.65), t, 2), M + 96, M + 12);
+  ctx.font = mono(700, fs);
+  ctx.fillText(scramble('CLAUDE', prog(t, 0.05, 0.4), t, 1), M, top);
+  ctx.font = mono(400, fs);
+  ctx.fillText(scramble('MOTION DESIGNER', prog(t, 0.15, 0.65), t, 2), nameX2, top);
 
   // Top-right: reel
   ctx.textAlign = 'right';
-  ctx.fillText(scramble('SHOWREEL ’26', prog(t, 0.25, 0.7), t, 3), W - M, M + 12);
+  ctx.fillText(scramble('SHOWREEL \u201926', prog(t, 0.25, 0.7), t, 3), W - M, top);
 
   // Bottom-left: timecode + progress track
   ctx.textAlign = 'left';
-  ctx.fillText(intro < 1 ? scramble(timecode(t), intro, t, 4) : timecode(t), M, H - M);
-  const trackW = 150;
+  ctx.fillText(intro < 1 ? scramble(timecode(t), intro, t, 4) : timecode(t), M, bottom);
   ctx.globalAlpha = alpha * 0.3;
-  ctx.fillRect(M + 164, H - M - 6, trackW, 1.5);
+  ctx.fillRect(trackX, bottom - 6 * k, trackW, 1.5 * k);
   ctx.globalAlpha = alpha;
-  ctx.fillRect(M + 164, H - M - 6, trackW * clamp(t / DURATION) * ease.outCubic(intro), 1.5);
+  ctx.fillRect(trackX, bottom - 6 * k, trackW * clamp(t / DURATION) * ease.outCubic(intro), 1.5 * k);
 
   // Bottom-right: chapter label (decodes on change)
   let ci = 0;
@@ -112,12 +124,12 @@ export function drawHUD(ctx, env, style) {
   const label = `${String(ci + 1).padStart(2, '0')}/${String(CHAPTERS.length).padStart(2, '0')}  ${ch.title}`;
   const p = ci === 0 ? prog(t, 0.3, 0.9) : clamp(since / 0.3);
   ctx.textAlign = 'right';
-  ctx.fillText(scramble(label, p, t, 10 + ci), W - M, H - M);
+  ctx.fillText(scramble(label, p, t, 10 + ci), W - M, bottom);
   // tiny beat indicator dot, pulses on each beat
   const bp = Math.exp(-((b % 1) * BEAT) * 10);
   ctx.globalAlpha = alpha * (0.35 + 0.65 * bp) * intro;
   ctx.beginPath();
-  ctx.arc(W - M - ctx.measureText(label).width - 22, H - M - 6, 3.5 + 1.5 * bp, 0, Math.PI * 2);
+  ctx.arc(W - M - ctx.measureText(label).width - 22 * k, bottom - 6 * k, (3.5 + 1.5 * bp) * k, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

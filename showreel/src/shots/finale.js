@@ -4,12 +4,10 @@
 import { clamp, lerp, prog, ease, spring, wobble, PAL, rgba, TAU, mulberry32, makeNoise, hexRGB } from '../lib.js';
 import { archivo, serif, mono } from '../fonts.js';
 import { BEAT, FINALE } from '../timeline.js';
-import { drawFollowSettled } from './principles.js';
+import { drawFollowSettled, followCenterY } from './principles.js';
 import { scramble } from '../hud.js';
 
 const N = 6200;
-const WM = { text: 'Claude', weight: 800, width: 100, size: 300, baseline: 598 };
-const CENTER = { x: 960, y: 520 };
 
 function samplePoints(ctx, W, H, step, rnd) {
   const d = ctx.getImageData(0, 0, W, H).data;
@@ -24,6 +22,22 @@ function samplePoints(ctx, W, H, step, rnd) {
 }
 
 export async function createFinale({ W, H }) {
+  // Per-format layout (landscape = the original design).
+  const V = H > W;
+  const fitWM = () => {
+    const c = document.createElement('canvas').getContext('2d');
+    c.font = archivo(800, 100, 100);
+    c.letterSpacing = '-2px';
+    const w = c.measureText('Claude').width;
+    c.letterSpacing = '0px';
+    return (100 * (W - 200)) / (w + c.measureText('.').width);
+  };
+  const WM = V
+    ? { text: 'Claude', weight: 800, width: 100, size: Math.round(fitWM()), baseline: Math.round(H * 0.5) }
+    : { text: 'Claude', weight: 800, width: 100, size: 300, baseline: 598 };
+  const CENTER = V ? { x: W / 2, y: Math.round(H * 0.46) } : { x: 960, y: 520 };
+  const GAL = V ? { scale: 0.74, tilt: -0.32, flat: 0.66, speed: 0.85, ball: 42 } : { scale: 1, tilt: -0.2, flat: 0.36, speed: 1, ball: 34 };
+  const SUB = V ? { size: 104, dy: 138 } : { size: 118, dy: 150 };
   const rnd = mulberry32(2026);
   const noise = makeNoise(11);
   const T = (b) => b * BEAT;
@@ -70,14 +84,14 @@ export async function createFinale({ W, H }) {
   for (let i = 0; i < n; i++) {
     const og = origins[i % origins.length];
     const tg = targets[i];
-    const dx = og[0] - W / 2, dy = og[1] - FINALE_TEXT_Y;
+    const dx = og[0] - W / 2, dy = og[1] - followCenterY;
     const ang = Math.atan2(dy, dx) + (rnd() - 0.5) * 1.2;
-    const sp = 250 + rnd() * 1300;
-    const Rr = 110 + Math.pow(rnd(), 0.8) * 640;
+    const sp = (250 + rnd() * 1300) * GAL.speed;
+    const Rr = (110 + Math.pow(rnd(), 0.8) * 640) * GAL.scale;
     P.push({
       ox: og[0], oy: og[1], tx: tg[0], ty: tg[1],
       vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 260,
-      R: Rr, th: rnd() * TAU, spd: (0.75 + rnd() * 0.5) * Math.pow(360 / Rr, 0.5),
+      R: Rr, th: rnd() * TAU, spd: (0.75 + rnd() * 0.5) * Math.pow((360 * GAL.scale) / Rr, 0.5),
       col: hexRGB(COLS[Math.floor(rnd() * COLS.length)]),
       size: 1.6 + rnd() * 2.6,
       d: rnd() * 0.42, w: rnd() * 0.5, ph: rnd() * TAU,
@@ -87,7 +101,7 @@ export async function createFinale({ W, H }) {
   // integrated vortex angle (rad) — angular velocity ramps up with the riser
   const w0 = 0.9, w1 = 6.2;
   const Omega = (b) => { const x = clamp(b - 24, 0, 4); return w0 * x + ((w1 - w0) * x * x * x) / 27; };
-  const TILT = -0.2, FLAT = 0.36;
+  const TILT = GAL.tilt, FLAT = GAL.flat;
 
   function particlePos(p, b) {
     const t = T(b - FINALE.shatter);
@@ -119,12 +133,12 @@ export async function createFinale({ W, H }) {
       const s = spring(t - T(24.4), 2.2, 0.4);
       const bob = Math.sin(b * Math.PI * 0.5) * 8;
       const ant = ease.inOutCubic(prog(b, 26.6, 27.0));
-      return { x: CENTER.x, y: CENTER.y + bob + ant * 10, r: 34 * s * (1 + 0.08 * Math.sin(b * Math.PI * 2)), sq: 0.25 * ant, glow: 1 };
+      return { x: CENTER.x, y: CENTER.y + bob + ant * 10, r: GAL.ball * s * (1 + 0.08 * Math.sin(b * Math.PI * 2)), sq: 0.25 * ant, glow: 1 };
     }
     if (b < FINALE.periodDrop) {
       const p = prog(b, 27.0, 27.35);
       if (p >= 1) return null;
-      return { x: CENTER.x, y: lerp(CENTER.y + 10, -120, ease.inQuad(p)), r: 34, st: 1 + 0.6 * p, glow: 1 };
+      return { x: CENTER.x, y: lerp(CENTER.y + 10, -120, ease.inQuad(p)), r: GAL.ball, st: 1 + 0.6 * p, glow: 1 };
     }
     // period drop & bounces
     const L = FINALE.periodLandings.map(T);
@@ -186,9 +200,10 @@ export async function createFinale({ W, H }) {
     const t = T(b);
     const punch = 1 + 0.07 * wobble(t - T(FINALE.impact), 2.4, 0.35) * 0.9 + 0.03 * Math.exp(-(t - T(FINALE.impact)) * 8);
     ctx.save();
-    ctx.translate(W / 2, WM.baseline - 100);
+    const pc = WM.baseline - WM.size / 3;
+    ctx.translate(W / 2, pc);
     ctx.scale(punch, punch);
-    ctx.translate(-W / 2, -(WM.baseline - 100));
+    ctx.translate(-W / 2, -pc);
     ctx.font = archivo(WM.weight, WM.width, WM.size);
     ctx.letterSpacing = `${-0.02 * WM.size}px`;
     ctx.fillStyle = PAL.paper;
@@ -201,12 +216,12 @@ export async function createFinale({ W, H }) {
     // Subtitle: "Motion Designer" — masked rise, per letter
     const sub = 'Motion Designer';
     ctx.save();
-    ctx.font = serif(118);
+    ctx.font = serif(SUB.size);
     const sw = ctx.measureText(sub).width;
     let x = W / 2 - sw / 2;
-    const y = WM.baseline + 150;
+    const y = WM.baseline + SUB.dy;
     ctx.beginPath();
-    ctx.rect(0, 0, W, y + 52);
+    ctx.rect(0, 0, W, y + SUB.size * 0.44);
     ctx.clip();
     for (let i = 0; i < sub.length; i++) {
       const ch = sub[i];
@@ -214,7 +229,7 @@ export async function createFinale({ W, H }) {
       const p = spring(t - T(FINALE.subtitle) - i * 0.018, 2.3, 0.55);
       if (p > 0) {
         ctx.fillStyle = PAL.orange;
-        ctx.fillText(ch, x, y + (1 - p) * 150);
+        ctx.fillText(ch, x, y + (1 - p) * SUB.size * 1.27);
       }
       x += cw;
     }
@@ -224,17 +239,27 @@ export async function createFinale({ W, H }) {
     const rp = ease.outExpo(prog(b, FINALE.details, FINALE.details + 1.2));
     if (rp > 0) {
       ctx.save();
-      const ry = WM.baseline + 228;
+      const ry = WM.baseline + SUB.dy + 78;
+      const half = V ? 380 : 520;
       ctx.fillStyle = rgba(PAL.paper, 0.35);
-      ctx.fillRect(W / 2 - 520 * rp, ry, 1040 * rp, 1.5);
-      ctx.font = mono(500, 17);
+      ctx.fillRect(W / 2 - half * rp, ry, 2 * half * rp, 1.5);
+      ctx.font = mono(500, V ? 20 : 17);
       ctx.letterSpacing = '3px';
       ctx.fillStyle = rgba(PAL.paper, 0.75);
       const tp = prog(b, FINALE.details + 0.2, FINALE.details + 1.4);
-      ctx.textAlign = 'left';
-      ctx.fillText(scramble('REEL 2026', tp, t, 91), W / 2 - 520, ry + 42);
-      ctx.textAlign = 'right';
-      ctx.fillText(scramble('TIMING / TYPE / SHAPE / SYSTEMS / 3D / GENERATIVE', tp, t, 92), W / 2 + 520, ry + 42);
+      const skills = 'TIMING / TYPE / SHAPE / SYSTEMS / 3D / GENERATIVE';
+      if (V) {
+        // stacked and centred for the narrow frame
+        ctx.textAlign = 'center';
+        ctx.fillText(scramble('REEL 2026', tp, t, 91), W / 2, ry + 50);
+        ctx.fillStyle = rgba(PAL.paper, 0.55);
+        ctx.fillText(scramble(skills, tp, t, 92), W / 2, ry + 90);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.fillText(scramble('REEL 2026', tp, t, 91), W / 2 - half, ry + 42);
+        ctx.textAlign = 'right';
+        ctx.fillText(scramble(skills, tp, t, 92), W / 2 + half, ry + 42);
+      }
       ctx.restore();
     }
   }
@@ -275,7 +300,7 @@ export async function createFinale({ W, H }) {
         ctx.lineWidth = 1.2;
         ctx.setLineDash([2, 10]);
         ctx.lineDashOffset = -Omega(b) * 60;
-        for (const rr of [240, 430, 640]) { ctx.beginPath(); ctx.ellipse(0, 0, rr, rr * FLAT, 0, 0, TAU); ctx.stroke(); }
+        for (const rr of [240, 430, 640]) { ctx.beginPath(); ctx.ellipse(0, 0, rr * GAL.scale, rr * GAL.scale * FLAT, 0, 0, TAU); ctx.stroke(); }
         ctx.restore();
       }
       // particles: back half, ball, front half
@@ -346,7 +371,9 @@ export async function createFinale({ W, H }) {
         ctx.strokeStyle = rgba(PAL.paper, 0.8 * (1 - p));
         ctx.lineWidth = 18 * (1 - p) + 0.5;
         ctx.beginPath();
-        ctx.ellipse(W / 2, WM.baseline - 110, 200 + 1300 * ease.outCubic(p), 90 + 700 * ease.outCubic(p), 0, 0, TAU);
+        const e = ease.outCubic(p);
+        if (V) ctx.ellipse(W / 2, WM.baseline - WM.size * 0.3, 170 + 900 * e, 120 + 1150 * e, 0, 0, TAU);
+        else ctx.ellipse(W / 2, WM.baseline - 110, 200 + 1300 * e, 90 + 700 * e, 0, 0, TAU);
         ctx.stroke();
         ctx.restore();
       }
@@ -392,5 +419,3 @@ export async function createFinale({ W, H }) {
     ],
   };
 }
-
-const FINALE_TEXT_Y = 560;

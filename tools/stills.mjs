@@ -1,9 +1,9 @@
 // Render selected frames for design review, optionally as a contact sheet.
-//   node tools/stills.mjs --frames 0,30,60 [--range 100:200:10] [--samples 1] [--out dir] [--sheet name.png --cols 4]
+//   node tools/stills.mjs --frames 0,30,60 [--range 100:200:10] [--samples 1] [--out dir] [--sheet name.png --cols 4] [--format vertical]
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { serve, openReel, grabFrame, ffmpegPath, args, ROOT } from './common.mjs';
+import { serve, openReel, grabFrame, ffmpegPath, args, ROOT, formatOf } from './common.mjs';
 
 const a = args();
 const frames = [];
@@ -18,7 +18,7 @@ const out = path.resolve(a.out || path.join(ROOT, 'output', 'stills'));
 fs.mkdirSync(out, { recursive: true });
 
 const srv = await serve();
-const { browser, page } = await openReel(srv.port, { gpu: !!a.gpu });
+const { browser, page } = await openReel(srv.port, { gpu: !!a.gpu, format: formatOf(a.format) });
 const files = [];
 const t0 = Date.now();
 for (const f of frames) {

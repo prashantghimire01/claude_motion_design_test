@@ -9,12 +9,16 @@ import { createWorld } from './shots/world.js';
 import { createPrinciples } from './shots/principles.js';
 import { createFinale } from './shots/finale.js';
 
-const { W, H, FPS, BEAT } = TL;
+const { FPS, BEAT } = TL;
+let W = TL.W, H = TL.H;
 const noise = makeNoise(7);
 
 let comp, layer, ctx, segs;
 
-export async function init() {
+export async function init(format = 'landscape') {
+  TL.setFormat(format);
+  W = TL.W;
+  H = TL.H;
   await loadFonts('./fonts/');
   const out = document.getElementById('out');
   comp = new Compositor(out, W, H);
