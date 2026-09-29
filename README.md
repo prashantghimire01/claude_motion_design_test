@@ -36,6 +36,8 @@ becomes a rounder, tilted disc, the end card stacks its details, and the HUD
 grows for phone screens. Each format exports its own event times, so the
 soundtrack is re-scored to the frame for each.
 
+![Vertical contact sheet](output/contact-sheet-vertical.jpg)
+
 ## Under the hood
 
 **Renderer** (`showreel/src`) — a Canvas 2D + WebGL2 compositor that runs in headless Chromium.
