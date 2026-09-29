@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude — Motion Reel 2026</title>
+<style>
+  :root { --ink: #0E0E10; --paper: #F3EEE3; --orange: #FF5B1F; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); }
+  body { display: grid; place-items: center; font: 500 13px/1.4 ui-monospace, monospace; overflow: hidden; }
+  #out { display: block; width: 1920px; height: 1080px; }
+  body.live #out { width: min(100vw, calc(100vh * 16 / 9)); height: auto; aspect-ratio: 16 / 9; cursor: pointer; }
+  #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); opacity: .7; letter-spacing: .12em; display: none; }
+  body.live #hint { display: block; }
+</style>
+</head>
+<body>
+<canvas id="out" width="1920" height="1080"></canvas>
+<div id="hint">CLICK TO PLAY · SPACE PAUSE · ←/→ SCRUB</div>
+<script type="module">
+  import { init, renderFrame, reelEvents, TL } from './src/main.js';
+  const params = new URLSearchParams(location.search);
+  await init();
+  const out = document.getElementById('out');
+
+  // Offline render API (used by tools/render.mjs and tools/stills.mjs)
+  window.renderFrameToPNG = (f, samples = 6, shutter = 0.5) => {
+    renderFrame(f, samples, shutter);
+    return out.toDataURL('image/png');
+  };
+  window.reelEvents = reelEvents;
+  window.ready = true;
+
+  if (params.has('live')) {
+    document.body.classList.add('live');
+    const audio = new Audio('./audio/soundtrack.wav');
+    let playing = false, t0 = 0, offset = 0;
+    const now = () => (playing ? (performance.now() - t0) / 1000 + offset : offset);
+    const toggle = () => {
+      if (playing) { offset = now(); playing = false; audio.pause(); }
+      else {
+        if (offset >= TL.DURATION) offset = 0;
+        playing = true; t0 = performance.now(); audio.currentTime = offset; audio.play().catch(() => {});
+      }
+    };
+    out.addEventListener('click', toggle);
+    addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); toggle(); }
+      if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
+        offset = Math.max(0, Math.min(TL.DURATION, now() + (e.code === 'ArrowRight' ? 1 : -1)));
+        if (playing) { t0 = performance.now(); audio.currentTime = offset; }
+      }
+    });
+    const loop = () => {
+      let t = now();
+      if (t >= TL.DURATION) { t = TL.DURATION - 1 / TL.FPS; if (playing) toggle(); offset = 0; }
+      renderFrame(Math.floor(t * TL.FPS), 1);
+      requestAnimationFrame(loop);
+    };
+    loop();
+  } else if (params.has('frame')) {
+    renderFrame(+params.get('frame'), +(params.get('samples') || 1));
+  }
+</script>
+</body>
+</html>

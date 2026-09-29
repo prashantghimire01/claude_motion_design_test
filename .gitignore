@@ -1,0 +1,4 @@
+node_modules/
+output/frames/
+output/stills/
+output/render.log

@@ -1,0 +1,17 @@
+{
+  "name": "claude-motion-reel-2026",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A 15-second motion design showreel, rendered entirely from code: deterministic canvas + WebGL2 renderer, sub-frame motion blur, and a procedurally synthesized soundtrack scored to the renderer's own event times.",
+  "type": "module",
+  "scripts": {
+    "events": "node tools/events.mjs",
+    "audio": "node showreel/audio/synth.mjs",
+    "stills": "node tools/stills.mjs",
+    "render": "node tools/events.mjs && node showreel/audio/synth.mjs && node tools/render.mjs",
+    "preview": "npx http-server . -p 8080 -c-1 -o /showreel/index.html?live"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}
